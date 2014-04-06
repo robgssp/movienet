@@ -7,32 +7,16 @@ import (
 	"path/filepath"
 )
 
-type MediaData struct {
-	name      string
-	directory bool
-	id        uint
-}
-
 var WatchChanges uint32 = fsnotify.FSN_DELETE | fsnotify.FSN_RENAME | fsnotify.FSN_CREATE
 
-func ListFiles(filename string, watcher *fsnotify.Watcher) []MediaData {
+func ScanFiles(media *MediaLibrary, root string, watcher *fsnotify.Watcher) *MediaLibrary {
 
-	media := make([]MediaData, 0)
-	var i uint
-	filepath.Walk(filename, func(path string, info os.FileInfo, err error) error {
-		fname, err := filepath.Abs(path)
-		if err != nil {
-			return err
-		}
+	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		isdir := (info.Mode() & os.ModeDir) != 0
 		if isdir {
 			watcher.WatchFlags(path, WatchChanges)
-			log.Println("Now tracking folder", path)
 		}
-		media = append(media, MediaData{
-			fname, isdir, i,
-		})
-		i++
+		media.Add(root, path, isdir)
 		return nil
 	})
 	return media
@@ -43,18 +27,17 @@ func ProcessFilesystem(dirs []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer watcher.Close()
 
 	done := make(chan bool)
+	library := NewMediaLibrary()
 
 	// Process events
 	go func() {
 		for {
 			select {
 			case ev := <-watcher.Event:
-				log.Println("event:", ev)
-				if ev.IsAttrib() {
-					log.Println("It's an attribute change!")
-				}
+				log.Println("event:", ev.Name)
 			case err := <-watcher.Error:
 				log.Println("error:", err)
 			}
@@ -63,14 +46,15 @@ func ProcessFilesystem(dirs []string) {
 
 	for _, fold := range dirs {
 		err = watcher.WatchFlags(fold, WatchChanges)
-		log.Println("Found items: ", ListFiles(fold, watcher))
 		if err != nil {
 			log.Fatal(err)
 		}
+		library = ScanFiles(library, fold, watcher)
 	}
 
-	<-done
+	log.Println("All items: ", library)
 
-	/* ... do stuff ... */
-	watcher.Close()
+	// Block here, so that the function doesn't end before the goroutine
+	// (which should be "never")
+	<-done
 }
