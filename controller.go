@@ -1,8 +1,10 @@
 package main
 
 import (
+//	"os"
 	"fmt"
 	"net"
+	"net/http"
 //	"bufio"
 //	"html/template"
 	"encoding/json"
@@ -27,13 +29,36 @@ type Dir struct {
 }
 
 func main() {
+	fmt.Println("Listening.")
+	
+	go srvListen()
+	httpListen()
+}
+
+// HTTP Frontend stuff
+
+func httpListen() {
+	http.HandleFunc("/", mainMenu)
+
+
+
+	http.ListenAndServe(":3424", nil)
+}
+
+func mainMenu(w http.ResponseWriter, r *http.Request) {
+	t, err = template.New("foo").Parse(`<html><body><h1>Bootleg</h1><ul>{{.}}</ul></body></html>`)
+
+}
+	
+// Server-manager stuff
+
+func srvListen() {
 	ln, err := net.Listen("tcp", ":3425")
 	if err != nil {
 		fmt.Println("Nope.")
-		return
+		panic(err)
 	}
 
-	fmt.Println("Listening.")
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -47,6 +72,9 @@ func main() {
 func server(c net.Conn) {
 	// rd := bufio.NewReader(c)
 	// wr := bufio.NewWriter(c)
+
+	dec := json.NewDecoder(c)
+
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Printf("Connection to server failed: %s\n", err)
@@ -55,19 +83,29 @@ func server(c net.Conn) {
 	}()
 	
 	srv := readServer(c)
-	
-
 	fmt.Printf("Received %s\n", srv)
-	c.Close()
+
+	var res map[string]interface{}
+	for {
+		if err := dec.Decode(&res); err != nil {
+			fmt.Printf("Server comms failed: %s\n", err)
+			break
+		}
+		switch res["type"] {
+		case "add":
+			// TODO handle add
+		case "remove":
+			// TODO handle remove
+		}
+	}
 }
 
-func readServer(c net.Conn) Server {
-	dec := json.NewDecoder(c)
+func readServer(c net.Conn, dec json.Decoder) Server {
 	var res map[string]interface{}
 
 	if err := dec.Decode(&res); err != nil {
 		fmt.Printf("Dun goof: %s\n", err)
-		panic("asdf")
+		panic(err)
 	}
 
 	return Server{res["name"].(string),  c, readFiles(res["tree"].(map[string]interface{}), nil).(Dir)}
@@ -90,4 +128,3 @@ func readFiles(jf map[string]interface{}, parent *Dir) interface{} {
 		panic("Invalid type")
 	}
 }
-
