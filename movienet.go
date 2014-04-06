@@ -8,5 +8,6 @@ import (
 func main() {
 	flag.Parse()
 	argv := flag.Args()
-	ProcessFilesystem(argv)
+	library := NewMediaLibrary()
+	ProcessFilesystem(library, argv)
 }

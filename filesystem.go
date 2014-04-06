@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var WatchChanges uint32 = fsnotify.FSN_DELETE | fsnotify.FSN_RENAME | fsnotify.FSN_CREATE
@@ -16,13 +17,13 @@ func ScanFiles(media *MediaLibrary, root string, watcher *fsnotify.Watcher) *Med
 		if isdir {
 			watcher.WatchFlags(path, WatchChanges)
 		}
-		media.Add(root, path, isdir)
+		media.Add(root, strings.Replace(path, root, "", 1), isdir)
 		return nil
 	})
 	return media
 }
 
-func ProcessFilesystem(dirs []string) {
+func ProcessFilesystem(library *MediaLibrary, dirs []string) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
@@ -30,14 +31,20 @@ func ProcessFilesystem(dirs []string) {
 	defer watcher.Close()
 
 	done := make(chan bool)
-	library := NewMediaLibrary()
 
 	// Process events
 	go func() {
 		for {
 			select {
 			case ev := <-watcher.Event:
-				log.Println("event:", ev.Name)
+				log.Println("event:", ev)
+				if ev.IsCreate()  {
+					library.AddFromEvent(ev.Name)
+				}
+				if ev.IsDelete() || ev.IsRename() {
+					library.RemoveFromEvent(ev.Name)
+				}
+				log.Println("All items: ", library)
 			case err := <-watcher.Error:
 				log.Println("error:", err)
 			}
@@ -52,7 +59,7 @@ func ProcessFilesystem(dirs []string) {
 		library = ScanFiles(library, fold, watcher)
 	}
 
-	log.Println("All items: ", library)
+	log.Println("All items:", library)
 
 	// Block here, so that the function doesn't end before the goroutine
 	// (which should be "never")
