@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"net"
+	"encoding/json"
 )
 
 var WatchChanges uint32 = fsnotify.FSN_DELETE | fsnotify.FSN_RENAME | fsnotify.FSN_CREATE
@@ -21,6 +23,20 @@ func ScanFiles(media *MediaLibrary, root string, watcher *fsnotify.Watcher) *Med
 		return nil
 	})
 	return media
+}
+
+func DumpJson(media *MediaLibrary, c net.Conn) {
+	enc := json.NewEncoder(c)
+	lib := struct {
+		Name string `json:"name"`
+		Tree []MediaFolderJson `json:"tree"`
+	}{Name:"bootleg", Tree:make([]MediaFolderJson,0,len(media.dirs))}
+	for _, root := range media.dirs {
+		lib.Tree = append(lib.Tree, root.ToJson())
+	}
+	if enc.Encode(lib) != nil {
+		panic("Could not encode JSON properly")
+	}
 }
 
 func ProcessFilesystem(library *MediaLibrary, dirs []string) {

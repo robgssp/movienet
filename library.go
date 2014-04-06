@@ -14,10 +14,41 @@ type MediaData struct {
 	id   MediaID `json:"`
 }
 
+type MediaDataJson struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+	Id   uint   `json:"id"`
+}
+
+func (data *MediaData) ToJson() MediaDataJson {
+	return MediaDataJson{Type:"file", Name:data.name, Id:uint(data.id)}
+}
+
 type MediaFolder struct {
 	name    string `json:"name"`
 	subdirs map[string]*MediaFolder
 	files   []*MediaData
+}
+
+type MediaFolderJson struct {
+	Type       string `json:"type"`
+	Name       string `json:"name"`
+	Children   []interface{}   `json:"children"`
+}
+
+func (fold *MediaFolder) ToJson() MediaFolderJson {
+	js := MediaFolderJson{
+		Type: "dir",
+		Name: fold.name,
+	}
+	js.Children = make([]interface{}, 0, len(fold.files)+len(fold.subdirs))
+	for _, fi := range fold.files {
+		js.Children = append(js.Children, fi.ToJson())
+	}
+	for _, dir := range fold.subdirs {
+		js.Children = append(js.Children, dir.ToJson())
+	}
+	return js
 }
 
 type MediaLibrary struct {
