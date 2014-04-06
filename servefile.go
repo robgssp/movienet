@@ -8,6 +8,7 @@ import (
     "strconv"
     "strings"
     "io"
+    "code.google.com/p/go.net/websocket"
 )
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -17,8 +18,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
     //    fmt.Printf("%s: %s\n", h, headers[h])
     //}
 
-    if r.URL.Path == "/test.webm"  && r.Method == "GET" {
-        stats, err := os.Stat("test3.webm")
+    if r.URL.Path[len(r.URL.Path) - 5:] == ".webm"  && r.Method == "GET" {
+        filepath := r.URL.Path[1:]
+        stats, err := os.Stat(filepath)
         if err != nil {
             fmt.Println("Error getting file stats")
             return
@@ -30,7 +32,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
         rangeString = rangeString[6:]
         intHolder, _ := strconv.Atoi(rangeString[0:strings.Index(rangeString, "-")])
         startLoc = int64(intHolder)
-        //fmt.Sscanf(headers["Range"][0], "bytes=%d-", startLoc)
 
         fmt.Printf("Start: %d\nEnd: %d\n", startLoc, endLoc)
 
@@ -38,7 +39,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
         w.Header()["Content-Length"] = []string{strconv.Itoa(int(stats.Size() - startLoc))}
         w.Header()["Content-Range"] = []string{"bytes " + strconv.Itoa(int(startLoc)) + "-" + strconv.Itoa(int(endLoc)) + "/" + strconv.Itoa(int(endLoc) + 1)}
 
-        file, err := os.Open("test3.webm")
+        file, err := os.Open(filepath)
         if err != nil {
             fmt.Println("Error reading video file")
             return
@@ -56,49 +57,25 @@ func handler(w http.ResponseWriter, r *http.Request) {
             fmt.Printf("Error copying. %d bytes written\n", n)
             return
         }
-        //bufLen := 16
-        //buf := make([]byte, bufLen)
-        //n, err := file.ReadAt(buf, startLoc)
-        //for err == nil {
-        //    w.Write(buf[0:n])
-        //    //fmt.Fprintf(w, "%s", buf[0:n])
-        //    n, err = file.Read(buf)
-        //}
+    } else {
+        path := r.URL.Path[1:]
+        fmt.Println("Giving the file " + path)
+        body, err := ioutil.ReadFile(path)
+        if err != nil {
+            fmt.Fprintf(w, "error!")
+        } else {
+            fmt.Fprintf(w, "%s", body)
+        }
     }
 }
 
-func servePage(w http.ResponseWriter, r *http.Request) {
-    body, err := ioutil.ReadFile("mn.html")
-    if err != nil {
-        fmt.Fprintf(w, "error!")
-    } else {
-        fmt.Fprintf(w, "%s", body)
-    }
-}
-
-func servePage2(w http.ResponseWriter, r *http.Request) {
-    body, err := ioutil.ReadFile("video-js.css")
-    if err != nil {
-        fmt.Fprintf(w, "error!")
-    } else {
-        fmt.Fprintf(w, "%s", body)
-    }
-}
-
-func servePage3(w http.ResponseWriter, r *http.Request) {
-    body, err := ioutil.ReadFile("video.js")
-    if err != nil {
-        fmt.Fprintf(w, "error!")
-    } else {
-        fmt.Fprintf(w, "%s", body)
-    }
+func WebSocket(ws *websocket.Conn) {
+    io.Copy(ws, ws)
 }
 
 func main() {
     http.HandleFunc("/", handler)
-    http.HandleFunc("/mn.html", servePage)
-    http.HandleFunc("/video-js.css", servePage2)
-    http.HandleFunc("/video.js", servePage3)
+    http.Handle("/ws", websocket.Handler(WebSocket))
     fmt.Println("Listening on port 8080 for requests")
     http.ListenAndServe(":8080", nil)
 }
